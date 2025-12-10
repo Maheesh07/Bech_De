@@ -5,42 +5,142 @@
 {% endblock %}
 {% block content %}
 <h2>Scan QR Codes</h2>
-<p>Point your camera at a student's Bech De QR.</p>
+<p>Point your <strong>back camera</strong> at a student's Bech De QR.</p>
+
 <div id="reader" style="width:100%; max-width:400px;"></div>
-<p id="status"></p>
-<p><a href="{{ url_for('leaderboard') }}" target="_blank">Open leaderboard</a></p>
+
+<p id="decoded" style="margin-top:10px; font-size:0.9rem; color:#555;"></p>
+<p id="status" style="margin-top:6px; font-weight:600;"></p>
+
+<p style="margin-top:16px;">
+  <a href="{{ url_for('leaderboard') }}" target="_blank">Open leaderboard</a>
+</p>
+
 <script>
   const statusEl = document.getElementById("status");
+  const decodedEl = document.getElementById("decoded");
+  const qrRegionId = "reader";
 
-  function showMessage(msg) {
+  function setStatus(msg) {
     statusEl.textContent = msg;
   }
 
-  function onScanSuccess(decodedText, decodedResult) {
-    // Stop scanning momentarily to avoid duplicates
-    html5QrcodeScanner.clear().then(_ => {
-      fetch("{{ url_for('api_scan') }}", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: decodedText })
-      })
-      .then(r => r.json())
-      .then(data => {
-        showMessage(data.message);
-        // restart scanner
-        html5QrcodeScanner.render(onScanSuccess);
-      })
-      .catch(err => {
-        showMessage("Error sending scan");
-        html5QrcodeScanner.render(onScanSuccess);
-      });
-    }).catch(_ => {});
+  function setDecoded(msg) {
+    decodedEl.textContent = msg ? "Decoded: " + msg : "";
   }
 
-  var html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: 250 },
-      false);
-  html5QrcodeScanner.render(onScanSuccess);
+  let html5QrCode = null;
+  let currentCameraId = null;
+
+  function startScanner(cameraId) {
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode(qrRegionId);
+    }
+
+    currentCameraId = cameraId;
+
+    html5QrCode
+      .start(
+        { deviceId: { exact: cameraId } },
+        { fps: 10, qrbox: 250 },
+        onScanSuccess,
+        (errorMessage) => {
+          // ignore scan failures; they are normal
+        }
+      )
+      .catch((err) => {
+        console.error("Error starting scanner:", err);
+        setStatus("❌ Could not start camera. Check permissions.");
+      });
+  }
+
+  function restartScanner() {
+    if (!html5QrCode || !currentCameraId) return;
+    html5QrCode
+      .start(
+        { deviceId: { exact: currentCameraId } },
+        { fps: 10, qrbox: 250 },
+        onScanSuccess,
+        (errorMessage) => {}
+      )
+      .catch((err) => {
+        console.error("Error restarting scanner:", err);
+        setStatus("❌ Camera error, reload the page.");
+      });
+  }
+
+  function onScanSuccess(decodedText, decodedResult) {
+    setDecoded(decodedText);
+    setStatus("Sending to server...");
+
+    // stop scanning while we talk to backend
+    html5QrCode
+      .stop()
+      .then(() => {
+        fetch("{{ url_for('api_scan') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: decodedText }),
+        })
+          .then(async (r) => {
+            let data;
+            try {
+              data = await r.json();
+            } catch (e) {
+              throw new Error("Could not parse server response");
+            }
+            if (data.status === "ok") {
+              setStatus(data.message + " | Your score: " + data.score);
+            } else if (data.status === "used") {
+              setStatus(data.message); // ⛔ Already claimed!
+            } else if (data.status === "invalid") {
+              setStatus("❓ Invalid code");
+            } else {
+              setStatus(data.message || "Unexpected response");
+            }
+          })
+          .catch((err) => {
+            console.error(err);
+            setStatus("❌ Error sending scan to server");
+          })
+          .finally(() => {
+            // restart scanner for next code
+            restartScanner();
+          });
+      })
+      .catch((err) => {
+        console.error("Error stopping scanner:", err);
+        setStatus("Camera error, reload the page.");
+      });
+  }
+
+  // 🔹 On page load: pick BACK camera if possible
+  Html5Qrcode.getCameras()
+    .then((devices) => {
+      if (!devices || devices.length === 0) {
+        setStatus("❌ No camera found");
+        return;
+      }
+
+      // Try to find a back / rear / environment camera by label
+      let backCam = devices.find((d) =>
+        (d.label || "").toLowerCase().includes("back")
+      );
+      if (!backCam) {
+        backCam = devices.find((d) =>
+          (d.label || "").toLowerCase().includes("rear")
+        );
+      }
+
+      // Fallback: last camera (on many phones rear cam is last)
+      const chosen = backCam || devices[devices.length - 1];
+
+      setStatus("Using camera: " + (chosen.label || "Back camera"));
+      startScanner(chosen.id);
+    })
+    .catch((err) => {
+      console.error("Error getting cameras:", err);
+      setStatus("❌ Could not access camera. Check browser permission.");
+    });
 </script>
 {% endblock %}

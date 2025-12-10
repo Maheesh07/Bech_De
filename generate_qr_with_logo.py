@@ -6,7 +6,7 @@ import os
 CODES_CSV = "codes.csv"          # your codes file
 LOGO_PATH = "Logo_E-Cell.png"    # your logo file
 OUTPUT_FOLDER = "qr_output"      # folder for QR images
-LOGO_SCALE = 4                   # 4 => logo ~25% of QR width
+LOGO_SCALE = 5                   # 4 => logo ~25% of QR width
 
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
@@ -45,7 +45,7 @@ for idx, code in enumerate(df["code"]):
     lw, lh = logo_resized.size
 
     # White padding behind logo
-    padding = 10  # adjust if needed
+    padding = 8  # adjust if needed
     white_box = Image.new("RGBA", (lw + padding, lh + padding), (255, 255, 255, 255))
 
     # Center white box
