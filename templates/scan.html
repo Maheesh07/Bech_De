@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Scan{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/html5-qrcode"></script>
+{% endblock %}
+{% block content %}
+<h2>Scan QR Codes</h2>
+<p>Point your camera at a student's Bech De QR.</p>
+<div id="reader" style="width:100%; max-width:400px;"></div>
+<p id="status"></p>
+<p><a href="{{ url_for('leaderboard') }}" target="_blank">Open leaderboard</a></p>
+<script>
+  const statusEl = document.getElementById("status");
+
+  function showMessage(msg) {
+    statusEl.textContent = msg;
+  }
+
+  function onScanSuccess(decodedText, decodedResult) {
+    // Stop scanning momentarily to avoid duplicates
+    html5QrcodeScanner.clear().then(_ => {
+      fetch("{{ url_for('api_scan') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: decodedText })
+      })
+      .then(r => r.json())
+      .then(data => {
+        showMessage(data.message);
+        // restart scanner
+        html5QrcodeScanner.render(onScanSuccess);
+      })
+      .catch(err => {
+        showMessage("Error sending scan");
+        html5QrcodeScanner.render(onScanSuccess);
+      });
+    }).catch(_ => {});
+  }
+
+  var html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader",
+      { fps: 10, qrbox: 250 },
+      false);
+  html5QrcodeScanner.render(onScanSuccess);
+</script>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard{% endblock %}
+{% block content %}
+<h2>Leaderboard</h2>
+<table border="0" cellpadding="8" cellspacing="0">
+  <tr><th>Rank</th><th>Player</th><th>Score</th></tr>
+  {% for p in players %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>🏅 {{ p['name'] }}</td>
+      <td>{{ p['score'] }}</td>
+    </tr>
+  {% endfor %}
+</table>
+<p style="margin-top:16px;font-size:0.9em;color:#555;">Page auto-refresh every 5 seconds.</p>
+<script>
+  setTimeout(function(){ location.reload(); }, 5000);
+</script>
+{% endblock %}
