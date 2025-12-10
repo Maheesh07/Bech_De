@@ -4,40 +4,139 @@
 <script src="https://unpkg.com/html5-qrcode"></script>
 {% endblock %}
 {% block content %}
-<h2>Scan QR Codes</h2>
-<p>Point your <strong>back camera</strong> at a student's Bech De QR.</p>
+<div style="display:flex;flex-direction:column;gap:18px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Scan & Score</h2>
+      <p style="margin:0;color:#6b7280;font-size:0.95rem;">
+        Use your <strong>back camera</strong> to scan Bech De QR codes around campus.
+      </p>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;">
+      <div id="score-badge" style="
+        background: linear-gradient(135deg,#00bcd4,#3b82f6);
+        color:#fff;
+        padding:8px 16px;
+        border-radius:999px;
+        font-size:0.95rem;
+        font-weight:600;
+        box-shadow:0 2px 8px rgba(0,0,0,0.18);
+      ">
+        ⭐ Your score: <span id="score-value">0</span>
+      </div>
+      <small style="margin-top:4px;color:#9ca3af;">Leaderboard updates in real time.</small>
+    </div>
+  </div>
 
-<div id="reader" style="width:100%; max-width:400px;"></div>
+  <div style="
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    margin-top:6px;
+  ">
+    <div id="reader" style="
+      width:100%;
+      max-width:420px;
+      aspect-ratio:1/1;
+      margin:0 auto;
+      border-radius:18px;
+      overflow:hidden;
+      box-shadow:0 4px 14px rgba(0,0,0,0.18);
+      background:#000;
+    "></div>
 
-<p id="decoded" style="margin-top:10px; font-size:0.9rem; color:#555;"></p>
-<p id="status" style="margin-top:6px; font-weight:600;"></p>
+    <div style="
+      border-radius:14px;
+      padding:12px 14px;
+      background:#f3f4f6;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    ">
+      <div style="font-size:0.85rem;color:#6b7280;">
+        <strong>Last scanned code:</strong>
+        <span id="decoded" style="color:#111827;margin-left:4px;">–</span>
+      </div>
+      <div id="status-pill" style="
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        align-self:flex-start;
+        padding:6px 10px;
+        border-radius:999px;
+        font-size:0.85rem;
+        background:#e5e7eb;
+        color:#374151;
+      ">
+        <span id="status-dot" style="
+          width:8px;height:8px;border-radius:999px;background:#9ca3af;
+        "></span>
+        <span id="status-text">Align a QR inside the square to start.</span>
+      </div>
+    </div>
+  </div>
 
-<p style="margin-top:16px;">
-  <a href="{{ url_for('leaderboard') }}" target="_blank">Open leaderboard</a>
-</p>
+  <div style="margin-top:4px;font-size:0.9rem;color:#6b7280;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span>⚡ Tip: Good lighting and holding the phone steady will help the scanner detect faster.</span>
+    <a href="{{ url_for('leaderboard') }}" target="_blank" class="btn" style="padding:8px 14px;font-size:0.9rem;">
+      View Leaderboard
+    </a>
+  </div>
+</div>
 
 <script>
-  const statusEl = document.getElementById("status");
   const decodedEl = document.getElementById("decoded");
-  const qrRegionId = "reader";
-
-  function setStatus(msg) {
-    statusEl.textContent = msg;
-  }
-
-  function setDecoded(msg) {
-    decodedEl.textContent = msg ? "Decoded: " + msg : "";
-  }
+  const statusPill = document.getElementById("status-pill");
+  const statusDot = document.getElementById("status-dot");
+  const statusText = document.getElementById("status-text");
+  const scoreValue = document.getElementById("score-value");
 
   let html5QrCode = null;
   let currentCameraId = null;
 
+  function setStatus(type, msg) {
+    // type: 'idle' | 'success' | 'error' | 'warn'
+    let bg = "#e5e7eb";
+    let dot = "#9ca3af";
+    let color = "#374151";
+
+    if (type === "success") {
+      bg = "rgba(16,185,129,0.12)";
+      dot = "#10b981";
+      color = "#065f46";
+    } else if (type === "error") {
+      bg = "rgba(239,68,68,0.12)";
+      dot = "#ef4444";
+      color = "#7f1d1d";
+    } else if (type === "warn") {
+      bg = "rgba(245,158,11,0.12)";
+      dot = "#f59e0b";
+      color = "#92400e";
+    }
+
+    statusPill.style.background = bg;
+    statusDot.style.background = dot;
+    statusText.style.color = color;
+    statusText.textContent = msg;
+  }
+
+  function setDecoded(text) {
+    decodedEl.textContent = text || "–";
+  }
+
+  function updateScore(value) {
+    if (typeof value === "number") {
+      scoreValue.textContent = value;
+    }
+  }
+
   function startScanner(cameraId) {
     if (!html5QrCode) {
-      html5QrCode = new Html5Qrcode(qrRegionId);
+      html5QrCode = new Html5Qrcode("reader");
     }
 
     currentCameraId = cameraId;
+    setStatus("idle", "Camera ready. Point at a Bech De QR.");
 
     html5QrCode
       .start(
@@ -45,17 +144,18 @@
         { fps: 10, qrbox: 250 },
         onScanSuccess,
         (errorMessage) => {
-          // ignore scan failures; they are normal
+          // ignore continuous decode errors; normal behaviour
         }
       )
       .catch((err) => {
         console.error("Error starting scanner:", err);
-        setStatus("❌ Could not start camera. Check permissions.");
+        setStatus("error", "Could not start camera. Check permissions and reload.");
       });
   }
 
   function restartScanner() {
     if (!html5QrCode || !currentCameraId) return;
+
     html5QrCode
       .start(
         { deviceId: { exact: currentCameraId } },
@@ -65,15 +165,14 @@
       )
       .catch((err) => {
         console.error("Error restarting scanner:", err);
-        setStatus("❌ Camera error, reload the page.");
+        setStatus("error", "Camera error. Try reloading the page.");
       });
   }
 
   function onScanSuccess(decodedText, decodedResult) {
     setDecoded(decodedText);
-    setStatus("Sending to server...");
+    setStatus("warn", "Sending to server...");
 
-    // stop scanning while we talk to backend
     html5QrCode
       .stop()
       .then(() => {
@@ -89,58 +188,52 @@
             } catch (e) {
               throw new Error("Could not parse server response");
             }
+
             if (data.status === "ok") {
-              setStatus(data.message + " | Your score: " + data.score);
+              setStatus("success", data.message + " | Score updated.");
+              updateScore(data.score);
             } else if (data.status === "used") {
-              setStatus(data.message); // ⛔ Already claimed!
+              setStatus("warn", data.message || "Already claimed!");
             } else if (data.status === "invalid") {
-              setStatus("❓ Invalid code");
+              setStatus("error", "Invalid code. This QR is not part of the game.");
             } else {
-              setStatus(data.message || "Unexpected response");
+              setStatus("error", data.message || "Unexpected response from server.");
             }
           })
           .catch((err) => {
             console.error(err);
-            setStatus("❌ Error sending scan to server");
+            setStatus("error", "Error sending scan to server. Check your network.");
           })
           .finally(() => {
-            // restart scanner for next code
-            restartScanner();
+            // small delay so user can read status, then restart scanner
+            setTimeout(restartScanner, 600);
           });
       })
       .catch((err) => {
         console.error("Error stopping scanner:", err);
-        setStatus("Camera error, reload the page.");
+        setStatus("error", "Camera error. Try reloading the page.");
       });
   }
 
-  // 🔹 On page load: pick BACK camera if possible
+  // On load: choose back camera if possible
   Html5Qrcode.getCameras()
     .then((devices) => {
       if (!devices || devices.length === 0) {
-        setStatus("❌ No camera found");
+        setStatus("error", "No camera found on this device.");
         return;
       }
 
-      // Try to find a back / rear / environment camera by label
-      let backCam = devices.find((d) =>
-        (d.label || "").toLowerCase().includes("back")
-      );
-      if (!backCam) {
-        backCam = devices.find((d) =>
-          (d.label || "").toLowerCase().includes("rear")
-        );
-      }
+      let backCam =
+        devices.find((d) => (d.label || "").toLowerCase().includes("back")) ||
+        devices.find((d) => (d.label || "").toLowerCase().includes("rear"));
 
-      // Fallback: last camera (on many phones rear cam is last)
       const chosen = backCam || devices[devices.length - 1];
-
-      setStatus("Using camera: " + (chosen.label || "Back camera"));
+      setStatus("idle", "Using camera: " + (chosen.label || "Back camera"));
       startScanner(chosen.id);
     })
     .catch((err) => {
       console.error("Error getting cameras:", err);
-      setStatus("❌ Could not access camera. Check browser permission.");
+      setStatus("error", "Could not access camera. Allow camera permission and reload.");
     });
 </script>
 {% endblock %}

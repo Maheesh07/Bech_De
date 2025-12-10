@@ -1,19 +1,74 @@
 {% extends "base.html" %}
 {% block title %}Leaderboard{% endblock %}
 {% block content %}
-<h2>Leaderboard</h2>
-<table border="0" cellpadding="8" cellspacing="0">
-  <tr><th>Rank</th><th>Player</th><th>Score</th></tr>
-  {% for p in players %}
-    <tr>
-      <td>{{ loop.index }}</td>
-      <td>🏅 {{ p['name'] }}</td>
-      <td>{{ p['score'] }}</td>
-    </tr>
-  {% endfor %}
-</table>
-<p style="margin-top:16px;font-size:0.9em;color:#555;">Page auto-refresh every 5 seconds.</p>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+  <div>
+    <h2 style="margin-bottom:4px;">Live Leaderboard</h2>
+    <p style="margin:0;color:#6b7280;font-size:0.95rem;">
+      Top players of <strong>Bech De</strong>. Page refreshes automatically.
+    </p>
+  </div>
+  <div style="font-size:0.85rem;color:#9ca3af;">
+    ⏱ Auto-refresh every <strong>5 seconds</strong>
+  </div>
+</div>
+
+<div style="margin-top:18px;">
+  <div style="
+    border-radius:14px;
+    overflow:hidden;
+    border:1px solid #e5e7eb;
+    box-shadow:0 4px 12px rgba(0,0,0,0.06);
+  ">
+    <table>
+      <thead style="background:linear-gradient(135deg,#111827,#1f2937);color:#fff;">
+        <tr>
+          <th style="width:70px;">Rank</th>
+          <th>Player</th>
+          <th style="text-align:right;padding-right:18px;">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if players|length == 0 %}
+          <tr>
+            <td colspan="3" style="text-align:center;color:#9ca3af;padding:18px;">
+              No scans yet. Once players start scanning, you’ll see them here.
+            </td>
+          </tr>
+        {% else %}
+          {% for p in players %}
+            {% set rank = loop.index %}
+            {% if rank == 1 %}
+              {% set badge = "🥇" %}
+              {% set row_bg = "background:rgba(250,204,21,0.12);" %}
+            {% elif rank == 2 %}
+              {% set badge = "🥈" %}
+              {% set row_bg = "background:rgba(156,163,175,0.10);" %}
+            {% elif rank == 3 %}
+              {% set badge = "🥉" %}
+              {% set row_bg = "background:rgba(244,114,182,0.10);" %}
+            {% else %}
+              {% set badge = "🏅" %}
+              {% set row_bg = "" %}
+            {% endif %}
+            <tr style="{{ row_bg }}">
+              <td>{{ badge }} {{ rank }}</td>
+              <td style="font-weight:500;">{{ p["name"] }}</td>
+              <td style="text-align:right;padding-right:18px;font-weight:600;">
+                {{ p["score"] }}
+              </td>
+            </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <script>
-  setTimeout(function(){ location.reload(); }, 5000);
+  // Smooth auto-refresh for projector
+  setTimeout(function() {
+    window.location.reload();
+  }, 5000);
 </script>
 {% endblock %}
