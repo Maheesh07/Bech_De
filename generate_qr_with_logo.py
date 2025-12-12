@@ -1,67 +1,85 @@
 import qrcode
-from PIL import Image
+from PIL import Image, ImageDraw
 import pandas as pd
 import os
+from pathlib import Path
+import shutil
 
-CODES_CSV = "codes.csv"          # your codes file
-LOGO_PATH = "Logo_E-Cell.png"    # your logo file
-OUTPUT_FOLDER = "qr_output"      # folder for QR images
-LOGO_SCALE = 5                   # 4 => logo ~25% of QR width
+CSV_FILE = "codes.csv"
+LOGO_FILE = "Logo_E-Cell.png"
+OUT_DIR = "qr_output"
 
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+LOGO_SCALE = 6
+BOX_PADDING = 16
+BOX_ROUND = 14
+BOX_SIZE = 12
+QR_BORDER = 4
+
+os.makedirs(OUT_DIR, exist_ok=True)
+
+# Load CSV
+df = pd.read_csv(CSV_FILE, dtype=str)
+if "code" in df.columns:
+    codes = df["code"].astype(str).str.strip().tolist()
+else:
+    codes = df[df.columns[0]].astype(str).str.strip().tolist()
+
+codes = [c for c in codes if c]
 
 # Load logo
-logo = Image.open(LOGO_PATH).convert("RGBA")
+logo = Image.open(LOGO_FILE).convert("RGBA")
 
-# Read codes
-df = pd.read_csv(CODES_CSV)      # expects a column named "code"
-
-for idx, code in enumerate(df["code"]):
-    if pd.isna(code):
-        continue
-    text = str(code).strip()
-    if not text:
-        continue
-
-    # Create QR (black & white, high error correction)
+def make_qr(text, out_path):
     qr = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=10,
-        border=4,
+        box_size=BOX_SIZE,
+        border=QR_BORDER,
     )
-    qr.add_data(text)          # QR contains only the code, e.g. "STU123"
+    qr.add_data(text)
     qr.make(fit=True)
 
     img_qr = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
 
-    # Resize logo and paste in centre
     qr_w, qr_h = img_qr.size
-    logo_size = qr_w // LOGO_SCALE
-    logo_resized = logo.copy()
-    logo_resized.thumbnail((logo_size, logo_size), Image.LANCZOS)
+    logo_target = qr_w // LOGO_SCALE
 
-    # Position logo with a clean white background
+    logo_resized = logo.copy()
+    logo_resized.thumbnail((logo_target, logo_target), Image.LANCZOS)
     lw, lh = logo_resized.size
 
-    # White padding behind logo
-    padding = 8  # adjust if needed
-    white_box = Image.new("RGBA", (lw + padding, lh + padding), (255, 255, 255, 255))
+    # White rounded box
+    box_w = lw + BOX_PADDING
+    box_h = lh + BOX_PADDING
 
-    # Center white box
-    pos = ((qr_w - white_box.size[0]) // 2,
-           (qr_h - white_box.size[1]) // 2)
+    white_box = Image.new("RGBA", (box_w, box_h), (255,255,255,255))
+    mask = Image.new("L", (box_w, box_h), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.rounded_rectangle([(0,0),(box_w-1, box_h-1)], radius=BOX_ROUND, fill=255)
+    white_box.putalpha(mask)
 
-    # Paste white box on QR
-    img_qr.paste(white_box, pos)
+    box_pos = ((qr_w - box_w)//2, (qr_h - box_h)//2)
+    img_qr.paste(white_box, box_pos, white_box)
 
-    # Now position the logo slightly inside
-    logo_pos = (pos[0] + padding//2, pos[1] + padding//2)
-    img_qr.paste(logo_resized, logo_pos, mask=logo_resized)
+    logo_pos = (box_pos[0] + (box_w - lw)//2, box_pos[1] + (box_h - lh)//2)
+    img_qr.paste(logo_resized, logo_pos, logo_resized)
+
+    img_qr.save(out_path, "PNG")
 
 
-    safe = "".join(c if c.isalnum() else "_" for c in text)
-    out_path = os.path.join(OUTPUT_FOLDER, f"QR_{safe or idx}.png")
-    img_qr.save(out_path)
+# Generate sequentially
+for idx, code in enumerate(codes, start=1):
+    filename = f"qr_{idx:03}.png"  # → qr_001.png
+    out_path = os.path.join(OUT_DIR, filename)
+    make_qr(code, out_path)
+    if idx % 100 == 0:
+        print(f"Generated: {idx}")
 
-print("Done. QR images are in folder:", OUTPUT_FOLDER)
+# Create zip file
+zip_path = "qr_output.zip"
+if os.path.exists(zip_path):
+    os.remove(zip_path)
+shutil.make_archive("qr_output", "zip", OUT_DIR)
+
+print("Done! Saved to:", OUT_DIR)
+print("Zip file:", zip_path)
