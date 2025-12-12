@@ -393,3 +393,41 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
+
+if __name__ == "__main__":
+	@app.route("/admin/players")
+	def admin_players():
+    		# OPTIONAL: protect the page with a simple password
+    		admin_pass = request.args.get("pass")
+    		expected = os.environ.get("ADMIN_PASS", "bechde123")
+
+    		if admin_pass != expected:
+        		return "Unauthorized. Add ?pass=YOUR_PASSWORD", 403
+
+    		rows = db_execute(
+        		"SELECT id, name, score FROM players ORDER BY id",
+        		fetchall=True
+    		) or []
+
+    		# Return a simple HTML table
+    		html = """
+    		<h2>Registered Players</h2>
+    		<table border='1' cellpadding='6' cellspacing='0' style='border-collapse: collapse;'>
+        		<tr>
+            		<th>ID</th>
+            		<th>Name</th>
+            		<th>Score</th>
+        		</tr>
+    		"""
+    		for r in rows:
+        		html += f"""
+        		<tr>
+            		<td>{r['id']}</td>
+            		<td>{r['name']}</td>
+            		<td>{r['score']}</td>
+        		</tr>
+        		"""
+
+    		html += "</table>"
+    		return html
+
